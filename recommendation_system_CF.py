@@ -29,6 +29,7 @@ def cosseno(rating1, rating2):
     else:
         return (xy /(sum_x2 * sum_y2))
 
+
 def computer_nearest_neighbor(user_rating, users):
     distances = []
     for user in users:
@@ -38,37 +39,52 @@ def computer_nearest_neighbor(user_rating, users):
     distances.sort()
     return distances
 
-def recomended(user_rating, users):
-    nearest = computer_nearest_neighbor(user_rating, users)[0][1]
+def recommended(user_rating, users):
+    nearests = computer_nearest_neighbor(user_rating, users)
+    if(len(nearests) > 0):
+        nearest = nearests[0][1]
+
     recommendations = []
     neighbor_ratings = users[nearest]
-    for anime in neighbor_ratings:
-        if anime not in user_rating:
-            recommendations.append((anime, neighbor_ratings[anime]))
     
-    return sorted(recommendations)
+    for anime in neighbor_ratings:
+        if anime not in user_rating[list(user_rating.keys())[0]]:
+            recommendations.append((anime, neighbor_ratings[anime]))
+    recommendations_sorted = sorted(recommendations, key=lambda x: x[1], reverse=True)
+    return recommendations_sorted[0:5]
 
 def get_users_valids_as_dict(user_rating):
-        df = pd.read_csv(r"C:\Users\Lucas\Desktop\faculdade\SextoPeriodo\oficina_de_desenvolvimento\recommendation_system_CF\dataset_anime\relation_rating.csv")
+        df = pd.read_csv(r"dataset\relation_rating.csv")
 
-        user_animes = list(user_rating.keys())
-        for i in range(user_animes):
+        user_animes = list(user_rating[list(user_rating.keys())[0]].keys())
+        for i in range(len(user_animes)):
             user_animes[i] = int(user_animes[i])
 
-        users_watched_similar_anime = df.query("anime_id in @user_animes")
-        print(users_watched_similar_anime.head(2))
-        users_watched_similar_anime_as_dict = dict()
+        users_watched_similar_anime = df[df['anime_id'].isin(user_animes)]['user_id'].unique()
+        users_watched_similar_anime  = df[df['user_id'].isin(users_watched_similar_anime)]
+
+        obj = dict()
         for user, anime, rating in zip(users_watched_similar_anime["user_id"], 
                                        users_watched_similar_anime["anime_id"], 
                                        users_watched_similar_anime["rating"]):
             try: 
-                users_watched_similar_anime_as_dict[str(user)].update({str(anime):rating})
+                obj[str(user)].update({anime:rating})
             except KeyError:
-                users_watched_similar_anime_as_dict[str(user)] = {str(anime):rating}
-        
-        return users_watched_similar_anime_as_dict
+                obj[str(user)] = {anime:rating}
+        return obj
+
+def get_anime_name_by_id(id:int=None, list:list=[]):
+    df = pd.read_csv(r"dataset\anime_with_id_name_english_name.csv")
+    if len(list) > 0:
+        animes_name = df.query("MAL_ID in @list")["Name"].tolist()
+    else:
+        animes_name = df.query(f"MAL_ID == {id}")["Name"].tolist()
+
+    return animes_name
 
 if __name__ == "__main__":
     
     users_rating = get_users_valids_as_dict(my_rating)
-    result = recomended(my_rating, users_rating)
+    result = recommended(my_rating, users_rating)
+    list_id_animes = [anime_id for anime_id, rating in result]
+    recommended_anime_names = get_anime_name_by_id(list=list_id_animes)
