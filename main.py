@@ -1,26 +1,7 @@
 import streamlit as st
 import pandas as pd
 from search import search
-from recommendation_system_CF import get_users_valids_as_dict, recomended
-
-# Lista de animes disponíveis
-animes = ["", "Boku no hero", "Death Note", "Jojo", "Dragon Ball", "Pokemon", "Naruto", "Banana Fish",
-          "Evangelium", "Chainsaw Man", "Sailor Moon"]
-
-# Lista de animes que o usuário pode avaliar
-anime_list = {
-    "Boku no hero": {"id": 100, "name": "Boku no hero", "pontuacao": 5},
-    "Death Note": {"id": 101, "name": "Death Note", "pontuacao": 7},
-    "Jojo": {"id": 102, "name": "Jojo", "pontuacao": 8},
-    "Dragon Ball": {"id": 103, "name": "Dragon Ball", "pontuacao": 6},
-    "Pokemon": {"id": 104, "name": "Pokemon", "pontuacao": 10},
-    "Naruto": {"id": 105, "name": "Naruto", "pontuacao": 10},
-    "Banana Fish": {"id": 106, "name": "Banana Fish", "pontuacao": 8},
-    "Evangelium": {"id": 107, "name": "Evangelium", "pontuacao": 6},
-    "Chainsaw Man": {"id": 108, "name": "Chainsaw Man", "pontuacao": 9},
-    "Sailor Moon": {"id": 109, "name": "Sailor Moon", "pontuacao": 10},
-}
-
+from recommendation_system_CF import get_users_valids_as_dict, recommended, get_anime_name_by_id
 
 
 def select_anime(index):
@@ -30,30 +11,24 @@ def select_anime(index):
     if st.button("Pesquisar", key=(index + 20)):
         anime_encontrado = search(selected_anime)
         
-        if anime_encontrado == "":
+        if len(anime_encontrado) == 0:
             st.caption("Anime não encontrado")
             return ""
         else:
             return anime_encontrado
 
-def search_anime_by_name(name):
-    for anime in animes:
-        if name.lower() == anime.lower():
-            return anime
-        
-    return ""
 
 def show_anime_input(index):
     # Pesquisar pelo anime
     selected_anime = select_anime(index)
-    anime = "..." if selected_anime == None else selected_anime
-    if type(anime)==list and anime[0]["name"]:
+    anime = "..." if selected_anime == "" else selected_anime
+    if type(anime)==list:
         st.session_state.user_data["user"][f"anime_{index+ 1}"]["name"] = anime[0]["name"]
         st.session_state.user_data["user"][f"anime_{index+ 1}"]["id"] = anime[0]["id"]
     
     # Anime score
     st.write("Dê uma pontuação para o anime:")
-    st.session_state.user_data["user"][f'anime_{index+1}']["pontuacao"] = st.slider("", min_value=0, max_value=10, value=5, step=None, format=None, key=index, on_change=None)
+    st.session_state.user_data["user"][f'anime_{index+1}']["rating"] = st.slider("", min_value=0, max_value=10, value=5, step=None, format=None, key=index, on_change=None)
 
 def verify_user_data():
     nomes = set()  # Conjunto para armazenar nomes e verificar duplicatas
@@ -82,12 +57,13 @@ def verify_user_data():
     return 0
 
 def show_recommended_animes(animes):
-    st.header("Animes recomendados para você:")
+    if(len(animes)>0):
+        st.header("Animes recomendados para você:")
 
-    i = 1
-    for anime in animes:
-        st.subheader(f':red[#{i}:] {anime}')
-        i = i + 1
+        i = 1
+        for anime in animes:
+            st.subheader(f':red[#{i}:] {anime}')
+            i = i + 1
 
 # Função para criar o aplicativo Streamlit
 def recommend_app():
@@ -103,39 +79,47 @@ def recommend_app():
 
     if st.button("Recomendar Animes"):
         result = verify_user_data()
-
         if result == 0:
-            # TODO: Recuperar os animes recomendados e os mostrar na função abaixo
-            
-            user_data_transformed = {}
-            print(st.session_state.user_data.items())
-            for anime_key, anime_values in st.session_state.user_data.items():
-                anime_id = anime_values["id"]
-                pontuacao = anime_values["pontuacao"]
-                user_data_transformed[anime_id] = pontuacao
+            st.session_state.recommended_animes = get_recommended_animes(st.session_state.user_data)
+            show_recommended_animes(st.session_state.recommended_animes)
 
-            result = {"user": user_data_transformed}
-
-            users_valid = get_users_valids_as_dict(result)
-            recommended_animes = recomended(result, users_valid)
-            show_recommended_animes(recommended_animes.keys())
         else:
             if result == 1:
                 st.toast('Você deixou campos nulos!', icon='😾')
             else:
                 st.toast('Você repetiu animes!', icon='😾')
 
-# Função principal do aplicativo Streamlit
-def main():
+def get_recommended_animes(user_data):
+    print("------------------")
+    animes_obj = [anime_obj for anime_obj in list(user_data["user"].values())]
+    user_rating = {"user":{}}
+    for anime_obj in animes_obj:
+        user_rating["user"].update({anime_obj["id"]:anime_obj["rating"]})
+    
+    print(user_rating)
+    users_valid = get_users_valids_as_dict(user_rating)
+    recommended_animes_id = recommended(user_rating, users_valid)
+    list_id_animes = [anime_id for anime_id, rating in recommended_animes_id]
+    recommended_animes = get_anime_name_by_id(list_id_animes)
+    print(recommended_animes)
+    return recommended_animes
+
+def start_session():
     if 'user_data' not in st.session_state:
         st.session_state.user_data = {"user":{
-            "anime_1": {"id":"","name": "...", "pontuacao": 0},
-            "anime_2": {"id":"","name": "...", "pontuacao": 0},
-            "anime_3": {"id":"","name": "...", "pontuacao": 0},
-            "anime_4": {"id":"","name": "...", "pontuacao": 0},
-            "anime_5": {"id":"","name": "...", "pontuacao": 0},
+            "anime_1": {"id":"","name": "...", "rating": 0},
+            "anime_2": {"id":"","name": "...", "rating": 0},
+            "anime_3": {"id":"","name": "...", "rating": 0},
+            "anime_4": {"id":"","name": "...", "rating": 0},
+            "anime_5": {"id":"","name": "...", "rating": 0},
             }
         }
+    if 'recommended_animes' not in st.session_state:
+        st.session_state.recommended_animes = []
+        
+# Função principal do aplicativo Streamlit
+def main():
+    start_session()
     recommend_app()
 
 if __name__ == "__main__":
